@@ -30,7 +30,14 @@ const PortfolioTable = ({ stocks, onDelete }) => {
                                         {stock.name}
                                         {stock.code && <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 400 }}>{stock.code}</span>}
                                     </td>
-                                    <td>{stock.price.toLocaleString()}원</td>
+                                    <td>
+                                        {stock.price.toLocaleString()}원
+                                        {stock.currency === 'USD' && (
+                                            <span style={{ display: 'block', fontSize: '0.7rem', color: '#10b981' }}>
+                                                (USD 연동됨)
+                                            </span>
+                                        )}
+                                    </td>
                                     <td>{stock.quantity.toLocaleString()}</td>
                                     <td>{value.toLocaleString()}원</td>
                                     <td>

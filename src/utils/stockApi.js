@@ -1,22 +1,23 @@
 /**
- * USD/KRW 환율 페칭 유틸리티 (네이버 증권 기반)
+ * USD/KRW 환율 페칭 유틸리티 (Yahoo Finance 기반)
  */
 export const fetchExchangeRate = async () => {
     try {
         const url = `https://api.allorigins.win/get?url=${encodeURIComponent(
-            `https://finance.naver.com/marketindex/exchangeDetail.naver?marketindexCd=FX_USDKRW`
-        )}`;
+            `https://query1.finance.yahoo.com/v8/finance/chart/USDKRW=X?interval=1m&range=1d`
+        )}&timestamp=${Date.now()}`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Exchange rate fetch failed');
         const data = await response.json();
-        const html = data.contents;
+        const parsedData = JSON.parse(data.contents);
 
-        // 정규식으로 환율 추출 (예: <span class="value">1,345.50</span>)
-        const match = html.match(/<span class="value">([\d,.]+)<\/span>/);
-        if (match) {
-            return parseFloat(match[1].replace(/,/g, ''));
+        const meta = parsedData?.chart?.result?.[0]?.meta;
+        const price = meta?.regularMarketPrice || meta?.previousClose;
+
+        if (price) {
+            return price;
         }
-        return 1350; // 실패 시 기본값 (근사치)
+        return 1350; // 최종 실패 시 기본값
     } catch (error) {
         console.error('Error fetching exchange rate:', error);
         return 1350;
@@ -26,37 +27,44 @@ export const fetchExchangeRate = async () => {
 /**
  * 실시간 주가 페칭 유틸리티 (국내 및 해외 지원)
  */
-export const fetchStockPrice = async (code) => {
-    if (!code) return null;
+export const fetchStockPrice = async (inputCode) => {
+    if (!inputCode) return null;
+    const code = inputCode.trim().toUpperCase();
 
     const isKoreanStock = /^[0-9]{6}$/.test(code);
 
     try {
         let url;
         if (isKoreanStock) {
-            // 네이버 증권 국내 주식 API
+            // 네이버 증권 국내 주식 API (QUERY 기반 대안)
             url = `https://api.allorigins.win/get?url=${encodeURIComponent(
-                `https://polling.finance.naver.com/api/realtime/site/stock/get?symbol=${code}`
-            )}`;
+                `https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:${code}`
+            )}&timestamp=${Date.now()}`;
         } else {
             // 야후 파이낸스 해외 주식
             url = `https://api.allorigins.win/get?url=${encodeURIComponent(
-                `https://query1.finance.yahoo.com/v8/finance/chart/${code.toUpperCase()}?interval=1m&range=1d`
-            )}`;
+                `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=1m&range=1d`
+            )}&timestamp=${Date.now()}`;
         }
 
         const response = await fetch(url);
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) throw new Error('Proxy server error');
 
         const data = await response.json();
+        if (!data.contents) throw new Error('No data received from proxy');
+
         const parsedData = JSON.parse(data.contents);
 
         if (isKoreanStock) {
-            if (parsedData?.result?.areas?.[0]?.datas?.[0]) {
-                const stockData = parsedData.result.areas[0].datas[0];
+            // Naver SERVICE_ITEM API 응답 구조: parsedData.result.areas[0].datas[0]
+            const stockData = parsedData?.result?.areas?.[0]?.datas?.[0] ||
+                parsedData?.resultData?.serviceItem?.[0] ||
+                parsedData?.result?.list?.[0];
+
+            if (stockData) {
                 return {
-                    price: parseFloat(stockData.nv),
-                    name: stockData.nm,
+                    price: parseFloat(stockData.nv || stockData.nowPrice || stockData.closePrice || 0),
+                    name: stockData.nm || stockData.itemCode || stockData.stockName || code,
                     code: code,
                     currency: 'KRW'
                 };
@@ -67,9 +75,9 @@ export const fetchStockPrice = async (code) => {
             if (result) {
                 const meta = result.meta;
                 return {
-                    price: meta.regularMarketPrice,
-                    name: code.toUpperCase(),
-                    code: code.toUpperCase(),
+                    price: meta.regularMarketPrice || meta.previousClose,
+                    name: meta.symbol || code,
+                    code: code,
                     currency: meta.currency || 'USD'
                 };
             }

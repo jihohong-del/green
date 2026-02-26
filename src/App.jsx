@@ -18,6 +18,15 @@ function App() {
     localStorage.setItem('portfolio', JSON.stringify(stocks));
   }, [stocks]);
 
+  useEffect(() => {
+    const getInitialRate = async () => {
+      const { fetchExchangeRate } = await import('./utils/stockApi');
+      const rate = await fetchExchangeRate();
+      setExchangeRate(rate);
+    };
+    getInitialRate();
+  }, []);
+
   const addStock = (stock) => {
     setStocks([...stocks, stock]);
   };
@@ -39,11 +48,12 @@ function App() {
           const updatedInfo = updatedStocks.find(u => u.code === stock.code);
           if (updatedInfo) {
             let finalPrice = updatedInfo.price;
-            // USD 종목인 경우 환율 적용
-            if (updatedInfo.currency === 'USD') {
+            // USD 종목인 경우 환율 적용 (대소문자 무시)
+            const currency = (updatedInfo.currency || '').toUpperCase();
+            if (currency === 'USD') {
               finalPrice = updatedInfo.price * newRate;
             }
-            return { ...stock, price: finalPrice };
+            return { ...stock, price: finalPrice, currency: currency };
           }
           return stock;
         }));
