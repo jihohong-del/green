@@ -71,6 +71,10 @@ export const fetchStockPrice = async (inputCode) => {
         };
 
         if (isKoreanStock) {
+            // 네이버 증권 모바일 API (UTF-8 보장)
+            const mobileApiUrl = `https://m.stock.naver.com/api/stock/${code}/integration`;
+            const parsedData = await proxyFetch(mobileApiUrl);
+
             // Naver Mobile API 응답 구조: 여러 가능성 체크
             const item = parsedData?.stockItem ||
                 parsedData?.totalInfos?.[0] ||
