@@ -48,32 +48,48 @@ export const fetchStockPrice = async (inputCode) => {
 
     try {
         let url;
+        const proxyFetch = async (targetUrl) => {
+            const proxies = [
+                (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}&timestamp=${Date.now()}`,
+                (url) => `https://thingproxy.freeboard.io/fetch/${url}` // 백업 프록시
+            ];
+
+            for (const getProxyUrl of proxies) {
+                try {
+                    const response = await fetch(getProxyUrl(targetUrl));
+                    if (response.ok) {
+                        const data = await response.json();
+                        // AllOrigins는 {contents: "..."} 형태, ThingProxy는 직접 데이터 반환
+                        const contents = data.contents || JSON.stringify(data);
+                        return JSON.parse(contents);
+                    }
+                } catch (e) {
+                    console.warn(`Proxy failed for ${targetUrl}:`, e);
+                }
+            }
+            throw new Error('All proxies failed');
+        };
+
         if (isKoreanStock) {
             // 네이버 증권 모바일 API (UTF-8 보장)
             const mobileApiUrl = `https://m.stock.naver.com/api/stock/${code}/integration`;
-            url = `https://api.allorigins.win/get?url=${encodeURIComponent(mobileApiUrl)}&timestamp=${Date.now()}`;
-        } else {
-            // 야후 파이낸스 해외 주식
-            url = `https://api.allorigins.win/get?url=${encodeURIComponent(
-                `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=1m&range=1d`
-            )}&timestamp=${Date.now()}`;
-        }
+            const parsedData = await proxyFetch(mobileApiUrl);
 
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Proxy server error');
+            // Naver Mobile API 응답 구조: stockItem 또는 totalInfos 확인
+            const item = parsedData?.stockItem || parsedData?.totalInfos?.[0];
 
-        const data = await response.json();
-        if (!data.contents) throw new Error('No data received from proxy');
+            if (item) {
+                // 한글 이름 (UTF-8)
+                const name = item.stockName || item.nm || code;
 
-        let parsedData = JSON.parse(data.contents);
+                // 가격 정보 필드 확인 (nowPrice, closePrice, dealPrice 등)
+                // 실시간성을 위해 nowPrice/dealPrice를 우선시함
+                const rawPrice = item.nowPrice ||
+                    item.dealPrice ||
+                    item.closePrice ||
+                    item.nv || 0;
 
-        if (isKoreanStock) {
-            // Naver Mobile API 응답 구조
-            const stockItem = parsedData?.stockItem;
-            if (stockItem) {
-                // 한글 이름이 정상적인지 확인 (UTF-8)
-                const name = stockItem.stockName || code;
-                const price = parseFloat(stockItem.closePrice?.toString().replace(/,/g, '') || 0);
+                const price = parseFloat(rawPrice.toString().replace(/,/g, ''));
 
                 return {
                     price,
@@ -83,7 +99,10 @@ export const fetchStockPrice = async (inputCode) => {
                 };
             }
         } else {
-            // 야후 파이낸스 파싱
+            // 야후 파이낸스 해외 주식
+            const yahooApiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=1m&range=1d`;
+            const parsedData = await proxyFetch(yahooApiUrl);
+
             const result = parsedData?.chart?.result?.[0];
             if (result) {
                 const meta = result.meta;
@@ -91,7 +110,7 @@ export const fetchStockPrice = async (inputCode) => {
                     price: meta.regularMarketPrice || meta.previousClose,
                     name: meta.symbol || code,
                     code: code,
-                    currency: meta.currency || 'USD'
+                    currency: (meta.currency || 'USD').toUpperCase()
                 };
             }
         }

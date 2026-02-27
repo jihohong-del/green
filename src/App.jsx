@@ -23,6 +23,14 @@ function App() {
       const { fetchExchangeRate } = await import('./utils/stockApi');
       const rate = await fetchExchangeRate();
       setExchangeRate(rate);
+
+      // 데이터 정규화: 6자리 숫자인 종목은 KRW로 강제 설정 (과거 연동 오류 복구)
+      setStocks(prevStocks => prevStocks.map(stock => {
+        if (/^[0-9]{6}$/.test(stock.code) && stock.currency !== 'KRW') {
+          return { ...stock, currency: 'KRW' };
+        }
+        return stock;
+      }));
     };
     getInitialRate();
   }, []);
