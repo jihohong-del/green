@@ -101,7 +101,9 @@ const PortfolioForm = ({ onAdd }) => {
                 border: 'none',
                 borderRadius: '0.5rem',
                 cursor: 'pointer',
-                opacity: (!code || isLoading) ? 0.5 : 1
+                opacity: (!code || isLoading) ? 0.5 : 1,
+                whiteSpace: 'nowrap',
+                minWidth: '70px'
               }}
             >
               {isLoading ? '...' : '불러오기'}

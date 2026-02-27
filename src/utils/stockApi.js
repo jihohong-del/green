@@ -71,23 +71,35 @@ export const fetchStockPrice = async (inputCode) => {
         };
 
         if (isKoreanStock) {
-            // 네이버 증권 모바일 API (UTF-8 보장)
-            const mobileApiUrl = `https://m.stock.naver.com/api/stock/${code}/integration`;
-            const parsedData = await proxyFetch(mobileApiUrl);
-
-            // Naver Mobile API 응답 구조: stockItem 또는 totalInfos 확인
-            const item = parsedData?.stockItem || parsedData?.totalInfos?.[0];
+            // Naver Mobile API 응답 구조: 여러 가능성 체크
+            const item = parsedData?.stockItem ||
+                parsedData?.totalInfos?.[0] ||
+                parsedData?.result?.areas?.[0]?.datas?.[0] ||
+                parsedData;
 
             if (item) {
-                // 한글 이름 (UTF-8)
-                const name = item.stockName || item.nm || code;
+                // 한글 이름 (UTF-8) - 다양한 필드 확인
+                let name = item.stockName || item.nm || item.itemName || code;
 
-                // 가격 정보 필드 확인 (nowPrice, closePrice, dealPrice 등)
-                // 실시간성을 위해 nowPrice/dealPrice를 우선시함
+                // 만약 이름이 없거나 코드와 같다면 자동완성 API로 보충 시도
+                if (!name || name === code) {
+                    try {
+                        const acUrl = `https://ac.finance.naver.com/ac?q=${code}&q_enc=utf-8&st=1&frm=stock&r_format=json&r_enc=utf-8&r_unicode=1&t_koreng=1`;
+                        const acData = await proxyFetch(acUrl);
+                        if (acData?.items?.[0]?.[0]?.[0]) {
+                            name = acData.items[0][0][0];
+                        }
+                    } catch (e) {
+                        console.warn('Name enhancement failed:', e);
+                    }
+                }
+
+                // 가격 정보 필드 확인 (nowPrice, dealPrice, closePrice, nv, lastPrice 등)
                 const rawPrice = item.nowPrice ||
                     item.dealPrice ||
                     item.closePrice ||
-                    item.nv || 0;
+                    item.nv ||
+                    item.lastPrice || 0;
 
                 const price = parseFloat(rawPrice.toString().replace(/,/g, ''));
 
