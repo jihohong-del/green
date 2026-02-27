@@ -49,10 +49,9 @@ export const fetchStockPrice = async (inputCode) => {
     try {
         let url;
         if (isKoreanStock) {
-            // 네이버 증권 모바일 API (UTF-8 보장 및 더 상세한 정보 제공)
-            url = `https://api.allorigins.win/get?url=${encodeURIComponent(
-                `https://m.stock.naver.com/api/stock/${code}/integration`
-            )}&timestamp=${Date.now()}`;
+            // 네이버 증권 모바일 API (UTF-8 보장)
+            const mobileApiUrl = `https://m.stock.naver.com/api/stock/${code}/integration`;
+            url = `https://api.allorigins.win/get?url=${encodeURIComponent(mobileApiUrl)}&timestamp=${Date.now()}`;
         } else {
             // 야후 파이낸스 해외 주식
             url = `https://api.allorigins.win/get?url=${encodeURIComponent(
@@ -66,24 +65,24 @@ export const fetchStockPrice = async (inputCode) => {
         const data = await response.json();
         if (!data.contents) throw new Error('No data received from proxy');
 
-        const parsedData = JSON.parse(data.contents);
+        let parsedData = JSON.parse(data.contents);
 
         if (isKoreanStock) {
-            // Naver Mobile API 통합 응답 구조
-            const stockData = parsedData?.totalInfos?.[0] || parsedData;
+            // Naver Mobile API 응답 구조
+            const stockItem = parsedData?.stockItem;
+            if (stockItem) {
+                // 한글 이름이 정상적인지 확인 (UTF-8)
+                const name = stockItem.stockName || code;
+                const price = parseFloat(stockItem.closePrice?.toString().replace(/,/g, '') || 0);
 
-            if (stockData) {
-                // 모바일 API는 거래소 코드와 종목명을 명확히 제공함
-                const dealPrice = stockData.dealPrice || stockData.closePrice || stockData.nowPrice;
                 return {
-                    price: parseFloat(dealPrice.toString().replace(/,/g, '') || 0),
-                    name: stockData.stockName || stockData.nm || code,
+                    price,
+                    name,
                     code: code,
                     currency: 'KRW'
                 };
             }
-        }
-        else {
+        } else {
             // 야후 파이낸스 파싱
             const result = parsedData?.chart?.result?.[0];
             if (result) {

@@ -53,7 +53,13 @@ function App() {
             if (currency === 'USD') {
               finalPrice = updatedInfo.price * newRate;
             }
-            return { ...stock, price: finalPrice, currency: currency };
+            // 종목명도 함께 업데이트하여 기존의 깨진 글자 복구
+            return {
+              ...stock,
+              name: updatedInfo.name || stock.name,
+              price: finalPrice,
+              currency: currency
+            };
           }
           return stock;
         }));
